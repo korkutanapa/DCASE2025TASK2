@@ -1,107 +1,159 @@
-# DCASE 2025 Task 2 – TDA-Based Anomalous Sound Detection
+DCASE 2025 Task 2 – TDA-Based First-Shot Anomalous Sound Detection
 
-This repository contains the code and extracted feature files used for a **Topological Data Analysis (TDA)-based anomalous sound detection framework** developed for **DCASE 2025 Task 2: First-Shot Unsupervised Anomalous Sound Detection for Machine Condition Monitoring**.
+This repository contains the notebooks and extracted feature files used to study a Topological Data Analysis (TDA) representation for DCASE 2025 Task 2: First-Shot Unsupervised Anomalous Sound Detection for Machine Condition Monitoring.
 
-## Overview
+The project is designed to investigate whether topological descriptors extracted from Mel spectrograms can provide useful and transferable information for anomalous machine-sound detection while keeping the final anomaly detector deliberately simple.
 
-The proposed framework represents machine sounds using topological descriptors extracted from Mel spectrograms.
+Important methodological distinction
 
-The general processing pipeline is:
+The development-set stage is a supervised oracle/capability analysis: development test labels are intentionally used to identify informative TDA descriptors.
 
-```text
+The unseen/evaluation-machine feature-selection stage is strict train-only: it uses only the 990 source-normal and 10 target-normal training recordings for each unseen machine. Evaluation/test recordings and their labels are not used for feature selection.
+
+Processing Pipeline
+
 WAV recording
+    ↓
+waveform normalization
     ↓
 Mel spectrogram
     ↓
-Cubical complex
+normalized cubical filtration
     ↓
-Persistent homology (H0 and H1)
+Persistent Homology (H0 and H1)
     ↓
-TDA feature extraction
+TDA descriptor extraction
     ↓
-Feature selection
+Development-set oracle feature analysis
     ↓
-kNN-based anomaly scoring
+frozen development-derived feature pool
     ↓
-DCASE official evaluation
-```
+strict train-only machine-specific feature selection
+    ↓
+kNN anomaly scoring
+    ↓
+DCASE-compatible output files
+    ↓
+official DCASE 2025 Task 2 evaluation
 
-A broad collection of persistence-based descriptors is extracted, including:
+Repository Contents
 
-* birth and death statistics
-* persistence lifetime statistics
-* Betti curve descriptors
-* persistence landscapes
-* persistence silhouettes
-* persistence images
-* Carlsson coordinates
-* tail and dominant persistence statistics
-* weighted birth/death/midlife descriptors
-* H0–H1 interaction features
+The current repository contains four main notebooks.
 
----
+1. ORJ_DCASE_TDA_FEATURE_CREATOR_CLEAN.ipynb
 
-## Repository Structure
+Creates TDA feature vectors directly from WAV recordings.
 
-### 1. TDA Feature Extraction
+Main operations:
 
-```text
-ORJ_DCASE_TDA_FEATURE_CREATOR.ipynb
-```
+recursively finds WAV files,
 
-This notebook converts machine-sound recordings into TDA feature vectors.
+loads each recording as mono while preserving the original sampling rate,
 
-Main steps:
+standardizes the waveform,
 
-1. Load WAV recordings.
-2. Compute Mel spectrograms.
-3. Interpret each spectrogram as a two-dimensional scalar field.
-4. Construct a cubical complex.
-5. Compute persistent homology for (H_0) and (H_1).
-6. Extract statistical, geometric, functional, and image-based TDA descriptors.
-7. Save the resulting feature matrices as Excel files.
+computes a Mel spectrogram,
 
----
+converts the Mel power spectrogram to dB,
 
-### 2. Development-Set Feature Selection
+constructs a normalized cubical filtration,
 
-```text
-ORJ_DCASE_FEATURE_SELECTION_FOR_DEVELOPMENT_DATASET.ipynb
-```
+computes persistent homology for H0 and H1,
 
-This notebook evaluates the TDA feature space on the labeled DCASE development machines.
+extracts a broad collection of TDA descriptors, and
 
-The development data are used to identify informative TDA descriptors and construct the transferable feature pool used in the subsequent unseen-machine experiments.
+saves the resulting feature matrix as an Excel file.
 
-Feature subsets are evaluated using kNN-based anomaly scores and the DCASE performance measures:
+Current Mel-spectrogram settings in the notebook are:
 
-* source-domain AUC
-* target-domain AUC
-* partial AUC at (p=0.1)
+N_FFT      = 2048
+HOP_LENGTH = 512
+N_MELS     = 128
+SR         = original recording sampling rate
 
-The main ranking criterion is based on the harmonic mean of these measures.
+The notebook uses GUDHI's CubicalComplex implementation for persistent homology.
 
-The development-stage search is used as an **oracle analysis**, since development test labels are available during this stage.
+The extracted descriptor families include, among others:
 
----
+birth statistics,
 
-### 3. Feature Selection for Unseen Machines
+death statistics,
 
-```text
-ORJ_DCASE_FEATURE_SELECTON_FOR_UNSEEN_DATA.ipynb
-```
+persistence-lifetime statistics,
 
-This notebook performs machine-specific feature selection for the previously unseen DCASE evaluation machine types.
+persistence entropy,
 
-The search starts from the TDA feature pool identified using the development machines.
+Betti-curve descriptors,
 
-For each unseen machine type, the available normal training recordings and unlabeled evaluation recordings are analyzed to identify a compact machine-specific subset of TDA descriptors.
+persistence landscapes,
 
-The resulting selected feature subsets are reported and can subsequently be used for anomaly scoring.
+persistence silhouettes,
 
-Evaluation machine types include:
+persistence-image descriptors,
 
-```text
+Carlsson-coordinate features,
+
+dominant/tail persistence statistics,
+
+weighted birth/death/midlife descriptors, and
+
+cross-homology / H0–H1 interaction descriptors.
+
+2. ORJ_DCASE_FEATURE_SELECTION_FOR_DEVELOPMENT_DATASET_CLEAN.ipynb
+
+Performs the development-set oracle analysis.
+
+This notebook uses the labeled DCASE development test data intentionally. Its purpose is not to simulate unseen-machine training, but to determine whether the TDA representation contains anomaly-relevant information and to identify a transferable descriptor pool.
+
+The current machine-specific search evaluates:
+
+k ∈ {3, 5, 10, 20, 30}
+subset size = 1 ... 20
+
+The default ranking objective is
+
+HM(AUC_source, AUC_target, pAUC@0.1)
+
+with the following tie-breakers:
+
+pAUC@0.1,
+
+min(AUC_source, AUC_target),
+
+overall AUC,
+
+fewer selected features, and
+
+smaller k.
+
+The search combines:
+
+exhaustive single-feature evaluation,
+
+exhaustive pair evaluation,
+
+k-preserving beam search for higher-dimensional subsets,
+
+a train-normal redundancy filter, and
+
+optional same-size swap refinement.
+
+Important outputs include:
+
+/content/joint_k_machine_specific_tda_oracle/
+    joint_k_machine_specific_tda_oracle.xlsx
+    best_oracle_feature_pool.json
+
+The notebook also contains a global-subset/global-k oracle analysis that can search for one common subset used across all development machines.
+
+Why labels are allowed here
+
+This stage is a development oracle/capability study. Development labels are used to learn which TDA descriptors are informative. They are not used to select features from the unseen evaluation recordings.
+
+3. ORJ_DCASE_FEATURE_SELECTION_FOR_UNSEEN_DATA_TRAIN_ONLY.ipynb
+
+Performs strict train-only machine-specific feature selection for the eight unseen DCASE evaluation machine types:
+
 AutoTrash
 BandSealer
 CoffeeGrinder
@@ -110,145 +162,294 @@ Polisher
 ScrewFeeder
 ToyPet
 ToyRCCar
-```
 
----
+The notebook starts from a frozen development-derived pool of 68 TDA descriptors.
 
-### 4. Anomaly Scoring and Official Evaluation
+For each machine, feature selection uses only:
 
-```text
-ORJ_DCASE_EVALUATOR_AND_OFFICIAL_CODE.ipynb
-```
+990 source-normal training recordings
+ 10 target-normal training recordings
+-------------------------------------
+1000 normal training recordings total
 
-This notebook uses the selected machine-specific TDA feature subsets to calculate anomaly scores.
+The evaluation/test feature file is not loaded during subset selection.
 
-Normal training recordings are used as the reference set, and test recordings are scored according to their k-nearest-neighbor distance in the selected TDA feature space.
+Train-only preprocessing
 
-The notebook then:
+For the subset-selection search, feature-wise min-max parameters are estimated from the pooled 1000 normal training recordings. Source-normal and target-normal samples are then retained as separate reference banks.
 
-1. computes anomaly scores,
-2. generates DCASE-compatible output files, and
-3. evaluates the results using the official DCASE 2025 Task 2 evaluation procedure.
+Train-only proxy scoring
 
-Typical output files are:
+Candidate feature subsets are evaluated using two normal reference geometries:
 
-```text
-anomaly_score_{MachineType}_section_00_test.csv
-decision_result_{MachineType}_section_00_test.csv
-```
+source-normal kNN: kS = 10
+target-normal kNN: kT = 3
 
----
+For normal samples, leave-one-out distances are used when scoring against their own reference bank. Distances are divided by sqrt(number_of_features) for dimensional comparability.
 
-## Extracted Feature Files
+The domain-specific distances are combined through
 
-The repository also contains the extracted TDA feature matrices so that the feature-selection and evaluation experiments can be reproduced without repeating the complete persistent-homology computation.
+score = min(d_source, d_target)
 
-Evaluation-machine feature files follow names such as:
+for the normal-only reliability calculations.
 
-```text
-cubical_mel_tda_features_AutoTrash.xlsx
-cubical_mel_tda_features_AutoTrash_thr.xlsx
-cubical_mel_tda_features_BandSealer.xlsx
-cubical_mel_tda_features_BandSealer_thr.xlsx
-...
-```
+Normal-only feature-selection objective
 
-Development-set feature files follow names such as:
+The label-free subset fitness combines:
 
-```text
-cubical_mel_tda_features_dev_ToyCar_train.xlsx
-cubical_mel_tda_features_dev_ToyCar_test.xlsx
-cubical_mel_tda_features_dev_ToyTrain_train.xlsx
-cubical_mel_tda_features_dev_ToyTrain_test.xlsx
-...
-```
+source-normal compactness,
 
----
+target-normal compactness,
 
-## Recommended Execution Order
+source-tail stability,
 
-The notebooks should be run in the following order:
+target-tail stability,
 
-```text
-1. ORJ_DCASE_TDA_FEATURE_CREATOR.ipynb
+target-normal acceptance under source-normal geometry,
 
-2. ORJ_DCASE_FEATURE_SELECTION_FOR_DEVELOPMENT_DATASET.ipynb
+source/target stability balance, and
 
-3. ORJ_DCASE_FEATURE_SELECTON_FOR_UNSEEN_DATA.ipynb
+a redundancy penalty.
+
+The current positive-component weights are:
+
+source compactness       0.20
+target compactness       0.20
+source tail stability    0.15
+target tail stability    0.15
+target acceptance        0.15
+domain stability balance 0.15
+
+with a redundancy penalty applied separately.
+
+Search strategy
+
+D = 1      exhaustive search over 68 features
+D = 2      exhaustive search over C(68,2) = 2278 pairs
+D = 3..20  beam search + random candidate injections
+
+Candidate quality is also calibrated within each dimensionality using a robust z-score so that subsets with different numbers of features can be compared more fairly.
+
+The notebook reports the highest-ranked subsets and produces an evaluator-ready:
+
+FEATURES_BY_MACHINE = {...}
+
+dictionary.
+
+Typical outputs include:
+
+selected_top10_by_machine.csv
+best_by_dimension.csv
+feature_effectiveness_ranking.csv
 
 4. ORJ_DCASE_EVALUATOR_AND_OFFICIAL_CODE.ipynb
-```
 
-If the extracted Excel feature files are already available, the computationally expensive TDA feature-extraction stage can be skipped.
+Uses fixed machine-specific feature subsets to calculate anomaly scores and run the official DCASE 2025 Task 2 evaluator.
 
----
+The current notebook contains a hard-coded:
 
-## Dataset
+FEATURES_BY_MACHINE = {...}
 
-This project is designed for the **DCASE 2025 Task 2 first-shot anomalous sound detection dataset**.
+dictionary.
 
-The raw audio dataset is not distributed in this repository and should be obtained from the official DCASE Challenge source.
+If the train-only feature-selection notebook is rerun and produces different rank-1 subsets, update this dictionary before evaluating the new selection.
 
----
+Final anomaly detector
 
-## Installation
+The final detector is intentionally simple.
+
+For every machine:
+
+the selected feature columns are loaded,
+
+preprocessing parameters are fitted only on source-normal training samples,
+
+each feature is centered by its source-normal median,
+
+the scale is chosen from source-normal IQR, MAD, or standard deviation as a numerical fallback,
+
+the 990 source-normal and 10 target-normal samples are pooled into one normal reference bank,
+
+Euclidean kNN is fitted with k = 10, and
+
+each test recording receives the mean distance to its 10 nearest normal samples.
+
+Therefore,
+
+larger anomaly score = more anomalous
+
+The optional binary decision threshold is the 0.99 quantile of leave-one-out normal-bank scores.
+
+The notebook generates DCASE-compatible files such as:
+
+anomaly_score_{MachineType}_section_00_test.csv
+decision_result_{MachineType}_section_00_test.csv
+
+It then clones and runs the official evaluator from:
+
+https://github.com/nttcslab/dcase2025_task2_evaluator
+
+and exports the official score tables.
+
+WARNING — Colab cleanup cell
+
+The first executable cell of the current evaluator notebook deletes all files and directories under /content.
+If you already uploaded feature files or other data into /content, either skip/remove that cleanup cell or execute it before uploading the required files.
+
+Precomputed Feature Files
+
+The repository includes precomputed Excel feature matrices, which makes it possible to reproduce feature-selection and evaluation experiments without recomputing persistent homology from the raw WAV recordings.
+
+Evaluation-machine files
+
+For each unseen machine, the current naming convention is:
+
+cubical_mel_tda_features_{Machine}.xlsx
+cubical_mel_tda_features_{Machine}_thr.xlsx
+
+In the current workflow:
+
+*_thr.xlsx is treated as the training-feature file,
+
+the corresponding file without _thr is treated as the evaluation/test-feature file.
+
+Examples:
+
+cubical_mel_tda_features_AutoTrash_thr.xlsx
+cubical_mel_tda_features_AutoTrash.xlsx
+cubical_mel_tda_features_CoffeeGrinder_thr.xlsx
+cubical_mel_tda_features_CoffeeGrinder.xlsx
+
+Development-machine files
+
+Development files follow the pattern:
+
+cubical_mel_tda_features_dev_{Machine}_train.xlsx
+cubical_mel_tda_features_dev_{Machine}_test.xlsx
+
+The repository currently includes development features for:
+
+ToyCar
+ToyTrain
+bearing
+fan
+gearbox
+slider
+valve
+
+Recommended Execution Order
+
+Reproduce the complete pipeline from WAV files
+
+1. ORJ_DCASE_TDA_FEATURE_CREATOR_CLEAN.ipynb
+2. ORJ_DCASE_FEATURE_SELECTION_FOR_DEVELOPMENT_DATASET_CLEAN.ipynb
+3. ORJ_DCASE_FEATURE_SELECTION_FOR_UNSEEN_DATA_TRAIN_ONLY.ipynb
+4. Update FEATURES_BY_MACHINE in the evaluator if necessary
+5. ORJ_DCASE_EVALUATOR_AND_OFFICIAL_CODE.ipynb
+
+Reproduce experiments from the feature files already stored in this repository
+
+The expensive TDA feature-generation stage can be skipped:
+
+1. ORJ_DCASE_FEATURE_SELECTION_FOR_DEVELOPMENT_DATASET_CLEAN.ipynb
+2. ORJ_DCASE_FEATURE_SELECTION_FOR_UNSEEN_DATA_TRAIN_ONLY.ipynb
+3. Update FEATURES_BY_MACHINE in the evaluator if necessary
+4. ORJ_DCASE_EVALUATOR_AND_OFFICIAL_CODE.ipynb
+
+If you only want to evaluate the feature subsets already hard-coded in the evaluator notebook, run the evaluator notebook with the required *_thr.xlsx and test .xlsx files available in the configured base directory.
+
+Dataset
+
+This work uses data from DCASE 2025 Task 2.
+
+Official task page:
+
+https://dcase.community/challenge2025/task-first-shot-unsupervised-anomalous-sound-detection-for-machine-condition-monitoring
+
+Official datasets:
+
+Development dataset: https://zenodo.org/records/15097779
+
+Additional training dataset: https://zenodo.org/records/15392814
+
+Evaluation dataset: https://zenodo.org/records/15519362
+
+The raw WAV datasets are not redistributed in this repository.
+
+For each DCASE 2025 evaluation machine, the additional training set provides 990 source-domain normal recordings and 10 target-domain normal recordings. The evaluation set contains 200 unlabeled test recordings per machine.
+
+Installation
+
+The notebooks are intended primarily for Python/Jupyter/Google Colab environments.
 
 Clone the repository:
 
-```bash
 git clone https://github.com/korkutanapa/DCASE2025TASK2.git
 cd DCASE2025TASK2
-```
 
-The notebooks are designed to run in Python/Jupyter environments such as **Google Colab**.
+A practical local installation is:
 
-Typical dependencies include:
+pip install numpy pandas scipy scikit-learn librosa matplotlib openpyxl tqdm gudhi
 
-```bash
-pip install numpy pandas scipy scikit-learn librosa matplotlib openpyxl
-```
+The notebooks may also install missing packages automatically when executed in Google Colab.
 
-Additional persistent-homology and TDA libraries are installed or imported by the corresponding feature-generation notebook.
+Methodological Notes
 
----
+Development oracle versus unseen-machine selection
 
-## Method Summary
+The two feature-selection stages serve different purposes and should not be conflated.
 
-The main objective of this study is to investigate whether **topological descriptors extracted from Mel spectrograms can provide transferable information for anomalous machine-sound detection**.
-
-The overall methodology can be summarized as:
-
-```text
 Development machines
+
+labeled development test data
         ↓
-TDA feature extraction
+supervised oracle search
         ↓
-Identification of informative TDA feature pool
+identify anomaly-informative TDA descriptors
         ↓
-Transfer to unseen machine types
+freeze transferable feature pool
+
+Unseen evaluation machines
+
+990 source-normal + 10 target-normal only
         ↓
-Machine-specific feature selection
+normal-only subset-selection criterion
         ↓
-kNN anomaly detection
+machine-specific feature subset
         ↓
-Official DCASE evaluation
-```
+fixed kNN anomaly detector
+        ↓
+evaluation test recordings
 
-The anomaly detector itself is deliberately simple, allowing the contribution of the TDA representation and feature-selection strategy to be studied directly.
+The evaluation test recordings are used only after feature selection, for anomaly scoring and official evaluation.
 
----
+Why use a simple kNN detector?
 
-## Citation
+The anomaly detector is intentionally lightweight. This makes it easier to study the contribution of the TDA representation and the feature-selection strategy without confounding the analysis with a large learned classifier or embedding model.
 
-If you use this repository or the proposed methodology, please cite the related work:
+Official Evaluation
 
-**Enhancing First-Shot Anomalous Sound Detection in Noisy Industrial Environments**
+The official DCASE 2025 Task 2 evaluator is available at:
 
----
+https://github.com/nttcslab/dcase2025_task2_evaluator
 
-## Author
+The official evaluation includes source-domain AUC, target-domain AUC, partial AUC, and the challenge aggregation procedure used to compute the official score.
 
-**Korkut Anapa**
+Citation
+
+If you use this repository, please cite the corresponding study when its final bibliographic information is available:
+
+Enhancing First-Shot Anomalous Sound Detection in Noisy Industrial Environments
+
+Please also cite the official DCASE 2025 Task 2 dataset/task publications as required by the challenge organizers.
+
+Author
+
+Korkut Anapa
 Institute of Applied Mathematics
 Middle East Technical University
 Ankara, Türkiye
+
+Scope of the Repository
+
+This repository is a research codebase. Paths, Colab-specific settings, hard-coded feature dictionaries, and experiment parameters reflect the current experimental workflow and may need to be adapted for another environment.
